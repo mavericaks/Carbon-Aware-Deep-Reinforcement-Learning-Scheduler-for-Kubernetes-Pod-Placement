@@ -1,0 +1,8 @@
+gymnasium==0.29.1
+stable-baselines3==2.2.1
+torch
+kubernetes==29.0.0
+fastapi==0.110.0
+uvicorn==0.28.0
+requests==2.31.0
+prometheus-client==0.20.0

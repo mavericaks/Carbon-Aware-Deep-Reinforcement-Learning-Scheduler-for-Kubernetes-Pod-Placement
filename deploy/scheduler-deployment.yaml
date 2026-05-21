@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbon-api-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carbon-api
+  template:
+    metadata:
+      labels:
+        app: carbon-api
+    spec:
+      containers:
+      - name: carbon-api
+        image: python:3.12-slim
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip install fastapi uvicorn pydantic requests
+          python -c "
+          import uvicorn
+          from carbon_api import app
+          uvicorn.run(app, host='0.0.0.0', port=8000)
+          "
+        ports:
+        - containerPort: 8000
+          name: http
+        volumeMounts:
+        - name: project-vol
+          mountPath: /app
+        workingDir: /app
+      volumes:
+      - name: project-vol
+        hostPath:
+          path: /home/cc/Course Project
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: carbon-api-service
+  namespace: default
+spec:
+  selector:
+    app: carbon-api
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carbon-aware-scheduler
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carbon-scheduler
+  template:
+    metadata:
+      labels:
+        app: carbon-scheduler
+    spec:
+      serviceAccountName: carbon-aware-scheduler-sa
+      containers:
+      - name: scheduler
+        image: python:3.12-slim
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # Install light system deps
+          apt-get update && apt-get install -y gcc g++
+          pip install --no-cache-dir kubernetes gymnasium stable-baselines3 torch requests prometheus-client fastapi uvicorn
+          python -u scheduler.py
+        env:
+        - name: CARBON_API_URL
+          value: "http://carbon-api-service:8000"
+        ports:
+        - containerPort: 9090
+          name: prometheus
+        volumeMounts:
+        - name: project-vol
+          mountPath: /app
+        workingDir: /app
+      volumes:
+      - name: project-vol
+        hostPath:
+          path: /home/cc/Course Project
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: carbon-scheduler-metrics-service
+  namespace: default
+spec:
+  selector:
+    app: carbon-scheduler
+  ports:
+  - protocol: TCP
+    port: 9090
+    targetPort: 9090
+  type: ClusterIP
