@@ -141,10 +141,10 @@ class CarbonAwareSchedEnv(gym.Env):
         truncated = False
         info = {}
 
-        w_carbon = 0.05
-        w_overload = 5.0
-        w_sla = 3.0
-        w_delay = 0.2
+        w_carbon = 5.0    # Highest priority: Minimize carbon footprint
+        w_overload = 0.5  # Lower priority: Allow slight load imbalances to achieve cleaner nodes
+        w_sla = 10.0      # Critical priority: Do not violate Latency-Sensitive SLAs
+        w_delay = 0.1
 
         pod_scheduled = False
         pod_deferred = False

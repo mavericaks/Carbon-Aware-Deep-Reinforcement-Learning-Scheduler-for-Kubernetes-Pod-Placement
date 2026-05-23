@@ -3,23 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carbon-Aware Kubernetes Scheduler Dashboard</title>
-    <!-- Google Fonts Inter & Outfit -->
+    <title>Carbon-Aware Kubernetes Scheduler Playground</title>
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #080b11;
-            --card-bg: rgba(17, 24, 39, 0.7);
+            --bg-color: #070913;
+            --card-bg: rgba(15, 23, 42, 0.7);
             --card-border: rgba(255, 255, 255, 0.08);
-            --text-primary: #f3f4f6;
-            --text-secondary: #9ca3af;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
             --primary: #10b981; /* Emerald */
             --primary-glow: rgba(16, 185, 129, 0.3);
             --accent: #06b6d4; /* Cyan */
             --warning: #f59e0b; /* Amber */
             --danger: #ef4444; /* Red */
             --info: #3b82f6; /* Blue */
-            --terminal-bg: #030712;
+            --terminal-bg: #020617;
         }
 
         * {
@@ -32,8 +32,8 @@
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
             background-image: 
-                radial-gradient(at 10% 20%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
-                radial-gradient(at 90% 80%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
+                radial-gradient(at 10% 20%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
             color: var(--text-primary);
             min-height: 100vh;
             padding: 2rem;
@@ -45,9 +45,8 @@
             font-weight: 600;
         }
 
-        /* Container */
         .container {
-            max-width: 1400px;
+            max-width: 1550px;
             margin: 0 auto;
         }
 
@@ -71,7 +70,7 @@
 
         .status-indicators {
             display: flex;
-            gap: 1.5rem;
+            gap: 1rem;
         }
 
         .status-badge {
@@ -103,10 +102,10 @@
             box-shadow: 0 0 10px var(--danger);
         }
 
-        /* Dashboard Grid Layout */
+        /* Grid Layout */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: 350px 1fr;
+            grid-template-columns: 420px 1fr;
             gap: 2rem;
         }
 
@@ -122,7 +121,7 @@
             gap: 2rem;
         }
 
-        /* Card styles (Glassmorphism) */
+        /* Glassmorphic Card */
         .card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -130,7 +129,7 @@
             padding: 1.5rem;
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
         }
 
         .card-title {
@@ -144,36 +143,37 @@
             color: #ffffff;
         }
 
-        /* Buttons Panel */
-        .btn-list {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
+        /* Controls */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
         }
 
         .btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             color: var(--text-primary);
-            padding: 0.85rem 1.25rem;
-            font-size: 0.95rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
             font-weight: 500;
             border-radius: 10px;
             cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.2s ease;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
         }
 
         .btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
-        .btn:active {
-            transform: translateY(1px);
+        .btn-span-2 {
+            grid-column: span 2;
         }
 
         .btn-primary {
@@ -184,7 +184,6 @@
 
         .btn-primary:hover {
             background: linear-gradient(135deg, #34d399, #059669);
-            box-shadow: 0 6px 20px 0 var(--primary-glow);
         }
 
         .btn-danger {
@@ -196,12 +195,115 @@
             background: linear-gradient(135deg, #f87171, #b91c1c);
         }
 
-        /* Pod Grid View */
+        /* Form styling */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .range-val {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            float: right;
+        }
+
+        /* Node Status List */
+        .node-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .node-row {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .node-name-label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #ffffff;
+        }
+
+        .carbon-badge {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .carbon-clean { background: rgba(16, 185, 129, 0.15); color: var(--primary); }
+        .carbon-moderate { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .carbon-dirty { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+        .progress-container {
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.2rem;
+        }
+
+        .progress-track {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 9999px;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        /* Workload Cards */
         .pod-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
             gap: 1.25rem;
-            min-height: 150px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
         }
 
         .pod-card {
@@ -210,30 +312,15 @@
             padding: 1rem;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
-            transition: all 0.3s ease;
+            gap: 0.6rem;
+            background: rgba(30, 41, 59, 0.3);
             position: relative;
-            overflow: hidden;
-            background: rgba(31, 41, 55, 0.4);
         }
 
-        /* Status card variants */
-        .pod-card.Running {
-            border-left: 4px solid var(--primary);
-            box-shadow: inset 5px 0 15px -5px rgba(16, 185, 129, 0.15);
-        }
-        .pod-card.Pending {
-            border-left: 4px solid var(--warning);
-            box-shadow: inset 5px 0 15px -5px rgba(245, 158, 11, 0.15);
-        }
-        .pod-card.Completed {
-            border-left: 4px solid var(--info);
-            box-shadow: inset 5px 0 15px -5px rgba(59, 130, 246, 0.15);
-        }
-        .pod-card.OutOfcpu {
-            border-left: 4px solid var(--danger);
-            box-shadow: inset 5px 0 15px -5px rgba(239, 68, 68, 0.15);
-        }
+        .pod-card.Running { border-left: 4px solid var(--primary); }
+        .pod-card.Pending { border-left: 4px solid var(--warning); }
+        .pod-card.Completed { border-left: 4px solid var(--info); }
+        .pod-card.OutOfcpu { border-left: 4px solid var(--danger); }
 
         .pod-header {
             display: flex;
@@ -243,42 +330,30 @@
 
         .pod-name {
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             color: #ffffff;
             text-overflow: ellipsis;
             white-space: nowrap;
             overflow: hidden;
+            max-width: 140px;
         }
 
         .pod-status-badge {
-            font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
             border-radius: 9999px;
-            font-weight: 600;
+            font-weight: 700;
+            text-transform: uppercase;
         }
         .Running .pod-status-badge { background: rgba(16, 185, 129, 0.15); color: var(--primary); }
         .Pending .pod-status-badge { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
         .Completed .pod-status-badge { background: rgba(59, 130, 246, 0.15); color: var(--info); }
         .OutOfcpu .pod-status-badge { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
 
-        .pod-detail {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-
-        .pod-detail span strong {
-            color: var(--text-primary);
-        }
-
-        /* SLA Label indicator */
         .sla-tag {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
             padding: 0.15rem 0.4rem;
             border-radius: 4px;
             width: fit-content;
@@ -286,124 +361,119 @@
         .sla-service { background: rgba(6, 182, 212, 0.15); color: var(--accent); }
         .sla-batch { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
 
-        /* Delay Progress Bar */
-        .delay-progress-container {
-            margin-top: 0.25rem;
-        }
-        .delay-progress-header {
-            display: flex;
-            justify-content: space-between;
+        .pod-detail {
             font-size: 0.75rem;
-            margin-bottom: 0.2rem;
             color: var(--text-secondary);
-        }
-        .delay-progress-bar {
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 9999px;
-            overflow: hidden;
-        }
-        .delay-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--warning), var(--danger));
-            border-radius: 9999px;
-            transition: width 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
         }
 
-        /* Reasoning AI Box */
-        .reasoning-list {
+        .pod-detail span strong {
+            color: var(--text-primary);
+        }
+
+        /* Decisions Table View */
+        .decision-list {
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
-            max-height: 250px;
+            max-height: 350px;
             overflow-y: auto;
             padding-right: 0.5rem;
         }
 
-        .reasoning-item {
-            background: rgba(255, 255, 255, 0.03);
+        .decision-row {
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            padding: 0.75rem;
-            font-size: 0.85rem;
-            line-height: 1.4;
+            border-radius: 10px;
+            padding: 1rem;
             display: flex;
             flex-direction: column;
-            gap: 0.25rem;
+            gap: 0.5rem;
         }
 
-        .reasoning-type {
-            font-size: 0.75rem;
+        .decision-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .decision-pod-badge {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: #ffffff;
+        }
+
+        .decision-action-badge {
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
         }
-        .reasoning-spatial { color: var(--primary); }
-        .reasoning-temporal { color: var(--warning); }
-        .reasoning-override { color: var(--danger); }
+        .action-scheduled { background: rgba(16, 185, 129, 0.15); color: var(--primary); }
+        .action-deferred { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .action-forced { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
 
-        .reasoning-time {
+        .decision-reasoning {
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: var(--text-primary);
+        }
+
+        .decision-footer {
+            display: flex;
+            justify-content: space-between;
             font-size: 0.7rem;
             color: var(--text-secondary);
-            align-self: flex-end;
+            border-top: 1px solid rgba(255, 255, 255, 0.03);
+            padding-top: 0.4rem;
+            margin-top: 0.2rem;
         }
 
-        /* Terminal Logs style */
+        /* Terminal Logs */
         .terminal {
             background-color: var(--terminal-bg);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
             padding: 1rem;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 0.85rem;
-            color: #34d399; /* Green text */
-            height: 250px;
+            font-size: 0.8rem;
+            color: #34d399;
+            height: 200px;
             overflow-y: auto;
             box-shadow: inset 0 4px 20px rgba(0,0,0,0.8);
-            line-height: 1.5;
+            line-height: 1.4;
         }
 
         .terminal-line {
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
             white-space: pre-wrap;
         }
 
-        /* Empty State */
         .empty-state {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 150px;
+            height: 120px;
             color: var(--text-secondary);
-            font-size: 0.9rem;
-            gap: 0.5rem;
+            font-size: 0.85rem;
+            gap: 0.4rem;
         }
 
         .empty-state svg {
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
             opacity: 0.4;
             stroke: currentColor;
         }
 
-        /* Scrollbar styles */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 9999px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
+        /* Layout Scrollbars */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -411,8 +481,8 @@
         <!-- Header -->
         <header>
             <div>
-                <h1>Carbon-Aware Kubernetes Scheduler</h1>
-                <p style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.25rem;">DRL-Based Spatial-Temporal Workload Optimizer</p>
+                <h1>Carbon-Aware Kubernetes Scheduling Playground</h1>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.2rem;">Verify carbon-aware neural placement decisions dynamically</p>
             </div>
             <div class="status-indicators">
                 <div class="status-badge">
@@ -426,61 +496,77 @@
             </div>
         </header>
 
-        <!-- Main Grid Layout -->
+        <!-- Columns Grid -->
         <div class="dashboard-grid">
             
-            <!-- Side Panel (Controls, Logs, Reasoning) -->
+            <!-- Side Panel (Control Panel, Injector, Node Status) -->
             <div class="side-panel">
-                <!-- Control Panel -->
+                <!-- System Orchestration Controls -->
                 <div class="card">
-                    <h3 class="card-title">Orchestration Controls</h3>
-                    <div class="btn-list">
-                        <button id="btn-start-api" class="btn" onclick="triggerAction('/api/start-api', 'Starting Carbon API...')">
-                            Start Grid Carbon API
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        </button>
-                        <button id="btn-start-sched" class="btn" onclick="triggerAction('/api/start-scheduler', 'Starting Scheduler...')">
-                            Start DRL Scheduler
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-                        </button>
-                        <button id="btn-inject" class="btn btn-primary" onclick="triggerAction('/api/inject-workloads', 'Injecting Workloads...')">
-                            Inject Load Test Pods
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                        </button>
-                        <button id="btn-cleanup" class="btn btn-danger" onclick="triggerAction('/api/clean-up', 'Cleaning up...')">
-                            Clean Up & Reset
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                        </button>
+                    <h3 class="card-title">System Controls</h3>
+                    <div class="btn-grid">
+                        <button id="btn-start-api" class="btn" onclick="triggerAction('/api/start-api')">Start API</button>
+                        <button id="btn-start-sched" class="btn" onclick="triggerAction('/api/start-scheduler')">Start Scheduler</button>
+                        <button id="btn-inject" class="btn btn-primary btn-span-2" onclick="triggerAction('/api/inject-workloads')">Inject Load Test Pods (x20)</button>
+                        <button id="btn-cleanup" class="btn btn-danger btn-span-2" onclick="triggerAction('/api/clean-up')">Reset Playground</button>
                     </div>
                 </div>
 
-                <!-- AI Reasoning -->
+                <!-- Custom Workload Injector -->
                 <div class="card">
-                    <h3 class="card-title">AI Scheduler Reasoning</h3>
-                    <div id="reasoning-container" class="reasoning-list">
-                        <div class="empty-state">
-                            <svg fill="none" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0012 18.75c-.307 0-.614-.086-.88-.253l-.548-.547z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
-                            Waiting for scheduling decisions...
-                        </div>
+                    <h3 class="card-title">Manual Pod Injector</h3>
+                    <div class="form-group">
+                        <label>CPU REQUEST (CORES) <span id="cpu-label" class="range-val">0.5 Cores</span></label>
+                        <input id="pod-cpu" type="range" class="form-control" min="0.1" max="2.0" step="0.1" value="0.5" oninput="document.getElementById('cpu-label').innerText = this.value + ' Cores'">
+                    </div>
+                    <div class="form-group">
+                        <label>MEMORY REQUEST (MiB) <span id="mem-label" class="range-val">512 MiB</span></label>
+                        <input id="pod-mem" type="range" class="form-control" min="128" max="4096" step="128" value="512" oninput="document.getElementById('mem-label').innerText = this.value + ' MiB'">
+                    </div>
+                    <div class="form-group">
+                        <label>SLA LATENCY PRIORITY</label>
+                        <select id="pod-sla" class="form-control">
+                            <option value="latency-sensitive">Latency-Sensitive (No Deferral Allowed)</option>
+                            <option value="delay-tolerant">Delay-Tolerant (Temporal Deferral Allowed)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%; border-radius: 8px; font-weight: 600;" onclick="injectCustomPod()">Submit Workload to Queue</button>
+                </div>
+
+                <!-- Cluster Node Status -->
+                <div class="card">
+                    <h3 class="card-title">Cluster Nodes State</h3>
+                    <div id="nodes-container" class="node-list">
+                        <!-- Polled nodes list -->
                     </div>
                 </div>
             </div>
 
-            <!-- Main Panel (Pods, Terminal Logs) -->
+            <!-- Main Panel (Cluster State, DRL Reasoning Decisions, Logs) -->
             <div class="main-panel">
-                
-                <!-- Pod Grid -->
+                <!-- Pod Grid State -->
                 <div class="card">
                     <h3 class="card-title">Kubernetes Cluster State (Workload View)</h3>
                     <div id="pod-grid" class="pod-grid">
                         <div class="empty-state" style="grid-column: 1/-1;">
                             <svg fill="none" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
-                            No test workloads running. Click "Inject Load Test Pods".
+                            No test workloads running. Click "Inject Load Test Pods" or use the Pod Injector above.
                         </div>
                     </div>
                 </div>
 
-                <!-- Raw stdout Terminal -->
+                <!-- Deep DRL Decision Explanations -->
+                <div class="card">
+                    <h3 class="card-title">Deep DRL Decisions & Rationale</h3>
+                    <div id="decisions-container" class="decision-list">
+                        <div class="empty-state">
+                            <svg fill="none" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0012 18.75c-.307 0-.614-.086-.88-.253l-.548-.547z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                            Waiting for DRL decisions from the scheduling polling loop...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Terminal -->
                 <div class="card">
                     <h3 class="card-title">Scheduler Log Feed (scheduler.log)</h3>
                     <div id="terminal-feed" class="terminal">
@@ -493,19 +579,45 @@
     </div>
 
     <script>
-        // Store seen logs to avoid duplicate reasoning items
-        const processedLogLines = new Set();
-
-        async function triggerAction(endpoint, loadingText) {
-            console.log(`Triggering: ${endpoint}`);
+        async function triggerAction(endpoint) {
             try {
-                const res = await fetch(endpoint, { method: 'POST' });
-                const data = await res.json();
-                console.log(data);
-                updateStatus();
-                updatePods();
+                await fetch(endpoint, { method: 'POST' });
+                refreshAll();
             } catch (err) {
                 console.error("Action error:", err);
+            }
+        }
+
+        async function injectCustomPod() {
+            const cpu = parseFloat(document.getElementById('pod-cpu').value);
+            const mem = parseFloat(document.getElementById('pod-mem').value);
+            const sla = document.getElementById('pod-sla').value;
+
+            try {
+                const res = await fetch('/api/inject-custom-pod', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cpu, mem, sla })
+                });
+                const data = await res.json();
+                console.log("Custom Pod Inject:", data);
+                refreshAll();
+            } catch (err) {
+                console.error("Inject custom pod error:", err);
+            }
+        }
+
+        async function deleteSinglePod(podName) {
+            try {
+                const res = await fetch('/api/delete-pod', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pod_name: podName })
+                });
+                console.log(`Deleted pod ${podName}`);
+                refreshAll();
+            } catch (err) {
+                console.error("Delete pod error:", err);
             }
         }
 
@@ -514,7 +626,6 @@
                 const res = await fetch('/api/status');
                 const data = await res.json();
                 
-                // API Indicator
                 const apiDot = document.getElementById('api-dot');
                 const apiText = document.getElementById('api-status-text');
                 if (data.carbon_api) {
@@ -527,7 +638,6 @@
                     apiText.style.color = "var(--danger)";
                 }
 
-                // Scheduler Indicator
                 const schedDot = document.getElementById('sched-dot');
                 const schedText = document.getElementById('sched-status-text');
                 if (data.scheduler) {
@@ -544,6 +654,77 @@
             }
         }
 
+        async function updateNodes() {
+            try {
+                const res = await fetch('/api/nodes');
+                const nodes = await res.json();
+                const container = document.getElementById('nodes-container');
+                
+                if (!nodes || nodes.length === 0) {
+                    container.innerHTML = `<div style="text-align: center; font-size: 0.8rem; color: var(--text-secondary);">Start Carbon API to retrieve node metrics</div>`;
+                    return;
+                }
+
+                let html = '';
+                nodes.forEach(node => {
+                    // Carbon intensity categorization
+                    let carbonClass = 'carbon-clean';
+                    let carbonLabel = 'CLEAN';
+                    if (node.carbon > 450) {
+                        carbonClass = 'carbon-dirty';
+                        carbonLabel = 'FOSSIL-HEAVY';
+                    } else if (node.carbon > 220) {
+                        carbonClass = 'carbon-moderate';
+                        carbonLabel = 'MODERATE';
+                    }
+
+                    const cpuPercent = (node.cpu_util * 100).toFixed(0);
+                    const memPercent = (node.mem_util * 100).toFixed(0);
+
+                    html += `
+                        <div class="node-row">
+                            <div class="node-header">
+                                <span class="node-name-label" title="${node.name}">${truncateNodeName(node.name)} (${node.zone})</span>
+                                <span class="carbon-badge ${carbonClass}">${node.carbon.toFixed(0)} gCO2eq/kWh [${carbonLabel}]</span>
+                            </div>
+                            
+                            <!-- CPU utilization -->
+                            <div class="progress-container">
+                                <div class="progress-label">
+                                    <span>CPU Aggregate Request Allocation</span>
+                                    <span>${cpuPercent}%</span>
+                                </div>
+                                <div class="progress-track">
+                                    <div class="progress-fill" style="width: ${cpuPercent}%; background: ${node.cpu_util > 0.9 ? 'var(--danger)' : 'var(--accent)'};"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Memory utilization -->
+                            <div class="progress-container">
+                                <div class="progress-label">
+                                    <span>Memory Request Allocation</span>
+                                    <span>${memPercent}%</span>
+                                </div>
+                                <div class="progress-track">
+                                    <div class="progress-fill" style="width: ${memPercent}%; background: var(--info);"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (err) {
+                console.error("Nodes fetch failed:", err);
+            }
+        }
+
+        function truncateNodeName(name) {
+            if (name.includes('control-plane')) return 'Control-Plane';
+            if (name.includes('stateful')) return 'Worker-Stateful';
+            if (name.includes('stateless')) return 'Worker-Stateless';
+            return name;
+        }
+
         async function updatePods() {
             try {
                 const res = await fetch('/api/pods');
@@ -554,7 +735,7 @@
                     grid.innerHTML = `
                         <div class="empty-state" style="grid-column: 1/-1;">
                             <svg fill="none" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
-                            No test workloads running. Click "Inject Load Test Pods".
+                            No test workloads running. Click "Inject Load Test Pods" or use the Pod Injector above.
                         </div>`;
                     return;
                 }
@@ -568,13 +749,13 @@
                     if (pod.status === 'Pending' && pod.sla !== 'latency-sensitive') {
                         const percent = (pod.delay / 5) * 100;
                         delaySection = `
-                            <div class="delay-progress-container">
-                                <div class="delay-progress-header">
-                                    <span>Temporal Deferral Delay</span>
+                            <div style="margin-top: 0.25rem;">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.15rem; color: var(--text-secondary);">
+                                    <span>Time Deferred</span>
                                     <span>${pod.delay}/5 steps</span>
                                 </div>
-                                <div class="delay-progress-bar">
-                                    <div class="delay-progress-fill" style="width: ${percent}%;"></div>
+                                <div style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 9999px; overflow:hidden;">
+                                    <div style="height:100%; width: ${percent}%; background: linear-gradient(90deg, var(--warning), var(--danger));"></div>
                                 </div>
                             </div>
                         `;
@@ -584,12 +765,15 @@
                         <div class="pod-card ${pod.status}">
                             <div class="pod-header">
                                 <div class="pod-name" title="${pod.name}">${pod.name}</div>
-                                <span class="pod-status-badge">${pod.status}</span>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <span class="pod-status-badge">${pod.status}</span>
+                                    <button onclick="deleteSinglePod('${pod.name}')" class="btn btn-danger" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; border-radius: 4px; min-width: auto; cursor: pointer;">Delete</button>
+                                </div>
                             </div>
                             <div class="sla-tag ${slaClass}">${slaLabel}</div>
                             <div class="pod-detail">
-                                <span>Target Node: <strong>${pod.node}</strong></span>
-                                ${pod.node !== '-' && pod.node !== 'None' ? `<span>Region: <strong>${getRegion(pod.node)}</strong></span>` : ''}
+                                <span>Requested: <strong>CPU: ${pod.cpu}, Mem: ${pod.mem}</strong></span>
+                                <span>Target Node: <strong>${truncateNodeName(pod.node)}</strong></span>
                             </div>
                             ${delaySection}
                         </div>
@@ -601,98 +785,60 @@
             }
         }
 
-        function getRegion(node) {
-            if (node.includes('control-plane')) return 'US-East (Fossil Heavy)';
-            if (node.includes('stateless')) return 'US-West (Solar Curve)';
-            if (node.includes('stateful')) return 'EU-West (Wind Pattern)';
-            return 'Unknown';
+        async function updateDecisions() {
+            try {
+                const res = await fetch('/api/decisions');
+                const decisions = await res.json();
+                const container = document.getElementById('decisions-container');
+                
+                if (!decisions || decisions.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <svg fill="none" viewBox="0 0 24 24"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0012 18.75c-.307 0-.614-.086-.88-.253l-.548-.547z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                            Waiting for DRL decisions from the scheduling polling loop...
+                        </div>`;
+                    return;
+                }
+
+                let html = '';
+                // Reverse to show latest decisions on top
+                decisions.slice().reverse().forEach(d => {
+                    let badgeClass = 'action-scheduled';
+                    if (d.action === 'Deferred') {
+                        badgeClass = 'action-deferred';
+                    } else if (d.action.includes('Forced')) {
+                        badgeClass = 'action-forced';
+                    }
+
+                    html += `
+                        <div class="decision-row">
+                            <div class="decision-header">
+                                <span class="decision-pod-badge">${d.pod_name}</span>
+                                <span class="decision-action-badge ${badgeClass}">${d.action}</span>
+                            </div>
+                            <div class="decision-reasoning">${d.reason}</div>
+                            <div class="decision-footer">
+                                <span>SLA: <strong>${d.sla}</strong> | Request: <strong>CPU: ${d.cpu} cores, Mem: ${d.mem}MiB</strong></span>
+                                <span>${d.timestamp}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (err) {
+                console.error("Decisions fetch failed:", err);
+            }
         }
 
-        async function updateLogsAndReasoning() {
+        async function updateLogs() {
             try {
                 const res = await fetch('/api/logs');
                 const logLines = await res.json();
                 
-                // Terminal
                 const terminal = document.getElementById('terminal-feed');
                 if (logLines.length > 0) {
                     terminal.innerHTML = logLines.map(line => `<div class="terminal-line">${escapeHtml(line)}</div>`).join('');
                     terminal.scrollTop = terminal.scrollHeight;
-                }
-
-                // Parse Reasoning
-                const reasoningContainer = document.getElementById('reasoning-container');
-                let newReasonings = [];
-                
-                logLines.forEach(line => {
-                    // Check if we already processed this exact line
-                    if (processedLogLines.has(line)) return;
-                    processedLogLines.add(line);
-
-                    let reasoning = null;
-                    const timestamp = new Date().toLocaleTimeString();
-
-                    if (line.includes("SLA Safeguard: Pod delay limit reached")) {
-                        reasoning = {
-                            type: "override",
-                            title: "SLA Deadline Override",
-                            desc: line.split("Safeguard: ")[1] || "Pod delay limit reached (5/5). Scheduler bypassed DRL and forced scheduling to prevent violation.",
-                            time: timestamp
-                        };
-                    } else if (line.includes("Action: Deferring scheduling for pod")) {
-                        reasoning = {
-                            type: "temporal",
-                            title: "Temporal Load Shifting",
-                            desc: line.split("Action: ")[1] || "Deferred scheduling because the grid carbon footprint is currently high.",
-                            time: timestamp
-                        };
-                    } else if (line.includes("Action: Scheduling pod") && line.includes("on Node")) {
-                        reasoning = {
-                            type: "spatial",
-                            title: "Spatial Placement Shifting",
-                            desc: line.split("Action: ")[1] || "Pod placed immediately on the cleanest available node.",
-                            time: timestamp
-                        };
-                    }
-
-                    if (reasoning) {
-                        newReasonings.push(reasoning);
-                    }
-                });
-
-                if (newReasonings.length > 0) {
-                    // Remove empty state if present
-                    const emptyState = reasoningContainer.querySelector('.empty-state');
-                    if (emptyState) {
-                        reasoningContainer.innerHTML = '';
-                    }
-
-                    newReasonings.forEach(r => {
-                        const item = document.createElement('div');
-                        item.className = 'reasoning-item';
-                        
-                        let headerClass = '';
-                        let icon = '';
-                        if (r.type === 'spatial') {
-                            headerClass = 'reasoning-spatial';
-                            icon = '🌍';
-                        } else if (r.type === 'temporal') {
-                            headerClass = 'reasoning-temporal';
-                            icon = '⏳';
-                        } else {
-                            headerClass = 'reasoning-override';
-                            icon = '🚨';
-                        }
-
-                        item.innerHTML = `
-                            <div class="reasoning-type ${headerClass}">
-                                <span>${icon} ${r.title}</span>
-                            </div>
-                            <div style="color: var(--text-primary); margin-top: 0.2rem;">${r.desc}</div>
-                            <div class="reasoning-time">${r.time}</div>
-                        `;
-                        reasoningContainer.insertBefore(item, reasoningContainer.firstChild);
-                    });
                 }
             } catch (err) {
                 console.error("Logs fetch failed:", err);
@@ -708,17 +854,19 @@
                 .replace(/'/g, "&#039;");
         }
 
-        // Poll every 2 seconds
-        setInterval(() => {
+        function refreshAll() {
             updateStatus();
+            updateNodes();
             updatePods();
-            updateLogsAndReasoning();
-        }, 2000);
+            updateDecisions();
+            updateLogs();
+        }
 
-        // Initial loads
-        updateStatus();
-        updatePods();
-        updateLogsAndReasoning();
+        // Poll every 2 seconds
+        setInterval(refreshAll, 2000);
+
+        // Initial load
+        refreshAll();
     </script>
 </body>
 </html>

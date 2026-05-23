@@ -1,3 +1,21 @@
+# Virtual Environment
 venv/
+env/
 __pycache__/
+*.pyc
+
+# Logs and State
 *.log
+decision_history.json
+
+# IDEs and OS Files
+.vscode/
+.idea/
+.DS_Store
+
+# Sensitive Assignment Details
+Cloud_Computing_Projects.pdf
+Cloud_Computing_Projects.txt
+
+# Do not ignore the pretrained model so others can test immediately
+!carbon_scheduler_model.zip

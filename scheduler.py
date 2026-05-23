@@ -27,6 +27,7 @@ NODE_ZONES = {
 P_IDLE = 100.0
 P_MAX = 250.0
 MAX_DELAY_STEPS = 5
+CLEAN_THRESHOLD = 250.0  # gCO2eq/kWh: below this, grid is clean enough to schedule immediately
 CARBON_API_URL = os.getenv("CARBON_API_URL", "http://localhost:8000")
 
 # Load cluster config
@@ -136,6 +137,46 @@ def get_node_resource_utilization():
         NODE_UTILIZATION.labels(node=name, resource="memory").set(min(1.0, mem_ratio))
 
     return sorted_nodes, ratios
+
+def truncate_node_name(name):
+    if not name:
+        return name
+    if "control-plane" in name:
+        return "Control-Plane"
+    if "stateful" in name:
+        return "Worker-Stateful"
+    if "stateless" in name:
+        return "Worker-Stateless"
+    return name
+
+def record_decision(pod_name, sla, cpu, mem, action, target_node, reason):
+    import json
+    history_file = "/home/cc/Course Project/decision_history.json"
+    data = []
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, "r") as f:
+                data = json.load(f)
+        except Exception:
+            pass
+    
+    new_entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "pod_name": pod_name,
+        "sla": sla,
+        "cpu": cpu,
+        "mem": mem,
+        "action": action,
+        "target_node": target_node,
+        "reason": reason
+    }
+    data.append(new_entry)
+    data = data[-100:]
+    try:
+        with open(history_file, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Error saving decision: {e}")
 
 def get_pending_pods_stream():
     while True:
@@ -249,7 +290,32 @@ def main():
             # 8. Action Execution and Safeguards
             # Action: Schedule on node
             if action < len(node_names):
-                target_node = node_names[action]
+                drl_target_node = node_names[action]
+                
+                # STRICT CARBON OVERRIDE
+                # The user wants absolute priority on carbon, overriding the DRL's resource balancing.
+                zone_intensities = {}
+                zone_to_node = {}
+                for idx, n_name in enumerate(node_names[:3]):
+                    target_node_obj = next((n for n in nodes if n.metadata.name == n_name), None)
+                    zn = target_node_obj.metadata.labels.get("zone", "unknown") if target_node_obj and target_node_obj.metadata.labels else "unknown"
+                    zone_intensities[zn] = carbon_vals[idx]
+                    zone_to_node[zn] = n_name
+                
+                cleanest_zone = min(zone_intensities, key=zone_intensities.get)
+                cleanest_ci = zone_intensities[cleanest_zone]
+                cleanest_node = zone_to_node[cleanest_zone]
+                
+                # If DRL chose a dirtier node AND the cleanest node has CPU < 85%
+                if drl_target_node != cleanest_node and node_ratios[cleanest_node]["cpu_ratio"] < 0.85:
+                    print(f"Strict Carbon Override: DRL chose {drl_target_node}, but {cleanest_node} is cleaner. Overriding.")
+                    target_node = cleanest_node
+                    action = node_names.index(cleanest_node) # Update action for accurate logging
+                    override_used = True
+                else:
+                    target_node = drl_target_node
+                    override_used = False
+
                 print(f"Action: Scheduling pod {name} on Node {target_node}...")
                 
                 # Bind the pod
@@ -266,6 +332,47 @@ def main():
                 CARBON_EMISSIONS.inc(estimated_co2)
                 
                 print(f"Pod {name} successfully bound to {target_node}. Estimated emissions: {estimated_co2:.4f}g CO2.")
+                
+                # Record decision
+                zone_intensities = {}
+                for idx, n_name in enumerate(node_names[:3]):
+                    target_node_obj = next((n for n in nodes if n.metadata.name == n_name), None)
+                    zn = target_node_obj.metadata.labels.get("zone", "unknown") if target_node_obj and target_node_obj.metadata.labels else "unknown"
+                    zone_intensities[zn] = carbon_vals[idx]
+                
+                selected_zone = zone
+                selected_ci = ci
+                min_zone = min(zone_intensities, key=zone_intensities.get)
+                min_ci = zone_intensities[min_zone]
+                
+                # Build sorted zone ranking for clarity
+                sorted_zones = sorted(zone_intensities.items(), key=lambda x: x[1])
+                zone_ranking = ", ".join([f"{z}={c:.1f}" for z, c in sorted_zones])
+                
+                if override_used:
+                    reason = (
+                        f"Strict Carbon Override: DRL agent chose '{truncate_node_name(drl_target_node)}' for load balancing, "
+                        f"but was forcefully overridden to '{truncate_node_name(target_node)}' ({selected_zone}) to strictly "
+                        f"prioritize carbon reduction. "
+                        f"Carbon ranking: [{zone_ranking}]. "
+                        f"Node load: CPU {node_ratios[target_node]['cpu_ratio'] * 100:.1f}%, Memory {node_ratios[target_node]['mem_ratio'] * 100:.1f}%."
+                    )
+                elif selected_zone == min_zone or selected_ci <= min_ci + 15.0:
+                    reason = (
+                        f"Carbon-Optimal Placement: Scheduled on Node '{truncate_node_name(target_node)}' ({selected_zone}) "
+                        f"because it has the lowest carbon intensity ({selected_ci:.1f} gCO2eq/kWh). "
+                        f"Carbon ranking: [{zone_ranking}]. "
+                        f"Node load: CPU {node_ratios[target_node]['cpu_ratio'] * 100:.1f}%, Memory {node_ratios[target_node]['mem_ratio'] * 100:.1f}%."
+                    )
+                else:
+                    reason = (
+                        f"Carbon-Aware Placement (with capacity check): Scheduled on Node '{truncate_node_name(target_node)}' ({selected_zone}, {selected_ci:.1f} gCO2eq/kWh). "
+                        f"The cleanest zone ({min_zone}, {min_ci:.1f} gCO2eq/kWh) was at high CPU load, so the agent selected "
+                        f"the next best option to balance carbon savings with resource availability. "
+                        f"Carbon ranking: [{zone_ranking}]. "
+                        f"Node load: CPU {node_ratios[target_node]['cpu_ratio'] * 100:.1f}%, Memory {node_ratios[target_node]['mem_ratio'] * 100:.1f}%."
+                    )
+                record_decision(name, sla_str, pod_cpu_req, pod_mem_req, "Scheduled", target_node, reason)
 
             # Action: Defer
             else:
@@ -278,19 +385,82 @@ def main():
                     PODS_SCHEDULED.labels(node=target_node, sla=sla_str).inc()
                     SLA_VIOLATIONS.inc()
                     print(f"Forced schedule pod {name} on node {target_node} due to SLA requirement.")
+                    
+                    zone_intensities = {}
+                    for idx, n_name in enumerate(node_names[:3]):
+                        target_node_obj = next((n for n in nodes if n.metadata.name == n_name), None)
+                        zn = target_node_obj.metadata.labels.get("zone", "unknown") if target_node_obj and target_node_obj.metadata.labels else "unknown"
+                        zone_intensities[zn] = carbon_vals[idx]
+                    
+                    reason = (
+                        f"SLA Safeguard: Model recommended deferring (Action 3), but the pod is latency-sensitive (SLA: Fast) "
+                        f"and cannot be delayed. Forced immediate scheduling on Node '{truncate_node_name(target_node)}' which has the lowest CPU utilization "
+                        f"({node_ratios[target_node]['cpu_ratio'] * 100:.1f}%) to guarantee response time. "
+                        f"Current grid carbon levels: " + ", ".join([f"{z}={c:.1f}" for z, c in zone_intensities.items()]) + "."
+                    )
+                    record_decision(name, sla_str, pod_cpu_req, pod_mem_req, "Forced Schedule", target_node, reason)
                 
-                # Safeguard 2: Delay-tolerant pods can only be deferred up to MAX_DELAY_STEPS
+                # Safeguard 2: Delay-tolerant pods — smart deferral with clean threshold check
                 else:
+                    # First: collect zone intensities for decision making
+                    zone_intensities = {}
+                    zone_to_node = {}
+                    for idx, n_name in enumerate(node_names[:3]):
+                        target_node_obj = next((n for n in nodes if n.metadata.name == n_name), None)
+                        zn = target_node_obj.metadata.labels.get("zone", "unknown") if target_node_obj and target_node_obj.metadata.labels else "unknown"
+                        zone_intensities[zn] = carbon_vals[idx]
+                        zone_to_node[zn] = n_name
+                    
+                    # Find the cleanest zone
+                    cleanest_zone = min(zone_intensities, key=zone_intensities.get)
+                    cleanest_ci = zone_intensities[cleanest_zone]
+                    cleanest_node = zone_to_node[cleanest_zone]
+                    sorted_zones = sorted(zone_intensities.items(), key=lambda x: x[1])
+                    zone_ranking = ", ".join([f"{z}={c:.1f}" for z, c in sorted_zones])
+                    
                     new_delay = current_delay + 1
-                    if new_delay > MAX_DELAY_STEPS:
+                    
+                    # SMART CHECK: If any zone is below the clean threshold, don't defer — schedule there!
+                    if cleanest_ci < CLEAN_THRESHOLD:
+                        print(f"Carbon Override: Zone {cleanest_zone} is clean ({cleanest_ci:.1f} < {CLEAN_THRESHOLD}). Scheduling immediately instead of deferring.")
+                        target_node = cleanest_node
+                        bind_pod(name, namespace, target_node)
+                        PODS_SCHEDULED.labels(node=target_node, sla=sla_str).inc()
+                        
+                        target_node_obj = next((n for n in nodes if n.metadata.name == target_node), None)
+                        zone = target_node_obj.metadata.labels.get("zone", "unknown") if target_node_obj and target_node_obj.metadata.labels else "unknown"
+                        ci = zone_intensities[zone]
+                        pod_power = (P_MAX - P_IDLE) * (pod_cpu_req / node_ratios[target_node]["cpu_capacity"])
+                        estimated_co2 = (pod_power / 1000.0) * 0.25 * ci
+                        CARBON_EMISSIONS.inc(estimated_co2)
+                        
+                        print(f"Pod {name} bound to {target_node}. Estimated emissions: {estimated_co2:.4f}g CO2.")
+                        reason = (
+                            f"Carbon-Optimal Override: DRL suggested deferral, but zone '{cleanest_zone}' is already clean "
+                            f"({cleanest_ci:.1f} gCO2eq/kWh < threshold {CLEAN_THRESHOLD}). "
+                            f"No benefit in waiting — scheduled immediately on Node '{truncate_node_name(target_node)}'. "
+                            f"Carbon ranking: [{zone_ranking}]. "
+                            f"Node load: CPU {node_ratios[target_node]['cpu_ratio'] * 100:.1f}%, Memory {node_ratios[target_node]['mem_ratio'] * 100:.1f}%."
+                        )
+                        record_decision(name, sla_str, pod_cpu_req, pod_mem_req, "Scheduled", target_node, reason)
+                    
+                    elif new_delay > MAX_DELAY_STEPS:
                         print("SLA Safeguard: Pod delay limit reached. Overriding deferral.")
-                        target_node = min(node_ratios, key=lambda k: node_ratios[k]["cpu_ratio"])
+                        target_node = cleanest_node  # Use cleanest node, not least-utilized
                         bind_pod(name, namespace, target_node)
                         PODS_SCHEDULED.labels(node=target_node, sla=sla_str).inc()
                         SLA_VIOLATIONS.inc()
                         print(f"Forced schedule pod {name} on node {target_node} to prevent further delay SLA violations.")
+                        
+                        reason = (
+                            f"Temporal Shift Timeout: Pod waited {new_delay}/{MAX_DELAY_STEPS} steps but all zones remained "
+                            f"above the clean threshold ({CLEAN_THRESHOLD} gCO2eq/kWh). "
+                            f"Forced scheduling on the cleanest available node '{truncate_node_name(target_node)}' ({cleanest_zone}, {cleanest_ci:.1f} gCO2eq/kWh). "
+                            f"Carbon ranking: [{zone_ranking}]."
+                        )
+                        record_decision(name, sla_str, pod_cpu_req, pod_mem_req, "Forced Schedule", target_node, reason)
                     else:
-                        print(f"Action: Deferring scheduling for pod {name}. Delay count: {new_delay}/{MAX_DELAY_STEPS}")
+                        print(f"Action: Deferring scheduling for pod {name}. Delay count: {new_delay}/{MAX_DELAY_STEPS}. All zones above {CLEAN_THRESHOLD} gCO2eq/kWh.")
                         # Update pod annotations
                         patch_body = {
                             "metadata": {
@@ -301,6 +471,14 @@ def main():
                             }
                         }
                         v1.patch_namespaced_pod(name, namespace, body=patch_body)
+                        
+                        reason = (
+                            f"Temporal Shifting: Deferred scheduling (step {new_delay}/{MAX_DELAY_STEPS}) "
+                            f"because ALL zones are above the clean threshold ({CLEAN_THRESHOLD} gCO2eq/kWh). "
+                            f"Carbon ranking: [{zone_ranking}]. "
+                            f"Waiting for grid conditions to improve before placing the workload."
+                        )
+                        record_decision(name, sla_str, pod_cpu_req, pod_mem_req, "Deferred", "-", reason)
 
 if __name__ == "__main__":
     main()

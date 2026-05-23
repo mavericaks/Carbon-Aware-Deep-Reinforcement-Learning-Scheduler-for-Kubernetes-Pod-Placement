@@ -1,151 +1,143 @@
-# Carbon-Aware Kubernetes Scheduler using Deep Reinforcement Learning (DRL)
+# 🌍 Carbon-Aware Deep Reinforcement Learning Kubernetes Scheduler
 
-This repository contains the complete implementation of a **Custom Carbon-Aware Kubernetes Scheduler** powered by Deep Reinforcement Learning (Proximal Policy Optimization - PPO). It is designed to jointly optimize grid carbon intensity, workload SLA constraints (latency-sensitive vs. delay-tolerant), and cluster node resource utilization.
+![Python](https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Scheduler-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-Dashboard-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Stable Baselines3](https://img.shields.io/badge/DRL-PPO-FF4B4B?style=for-the-badge&logo=pytorch)
+
+A custom, intelligent Kubernetes scheduler that leverages **Deep Reinforcement Learning (Proximal Policy Optimization)** to drastically reduce the carbon footprint of cloud workloads. It achieves this through autonomous **Spatial Shifting** (routing workloads to geo-regions with cleaner energy) and **Temporal Shifting** (deferring delay-tolerant batch jobs until grid carbon intensity drops).
+
+Included is a stunning real-time glassmorphic dashboard to visualize the neural agent's decision-making rationale, cluster load, and live carbon metrics.
 
 ---
 
-## 1. System Architecture
+## 📖 Literature Survey & Novelty
 
-The scheduler runs as an out-of-tree controller interacting directly with the Kubernetes API server and a mock carbon intensity provider.
+### The Problem with Traditional Schedulers
+The default `kube-scheduler` is designed purely for resource efficiency—its primary scoring functions revolve around `LeastAllocated` or `BalancedResourceAllocation`. It has **zero awareness** of the environmental impact of the physical data center powering the nodes.
+
+Recent industry attempts to build "Carbon-Aware" systems usually rely on rigid, rule-based heuristics (e.g., *always pick the node with the lowest carbon intensity*). However, rigid heuristics fail in complex, high-load environments because:
+1. They blindly pile workloads onto the "cleanest" node until it crashes (`OutOfcpu`).
+2. They cannot learn the long-term cascading consequences of their placement decisions.
+3. They struggle to balance Service Level Agreements (SLAs) with environmental goals.
+
+### Our Novel Approach
+This project establishes a novel approach by modeling workload scheduling as a **Markov Decision Process (MDP)** and training a **Proximal Policy Optimization (PPO)** agent to solve it. 
+
+**Novel Contributions:**
+1. **SLA-Aware Temporal Shifting:** The agent learns to read pod SLA annotations. If a workload is `delay-tolerant`, the agent may choose to *defer* scheduling (leaving the pod in a `Pending` state with an increasing delay counter) if all available grids are currently powered by fossil fuels, waiting for a cleaner renewable window. Latency-sensitive workloads bypass this to guarantee QoS.
+2. **Dynamic Penalty Optimization:** The agent's reward function penalizes high carbon emissions (`w_carbon = 5.0`) while simultaneously penalizing node overloads (`w_overload = 0.5`). Through 50,000+ training steps, the agent naturally learns the optimal trade-off boundary between carbon reduction and cluster stability.
+3. **Strict Carbon Override:** A deterministic fallback layer that intercepts the DRL agent if it prioritizes load-balancing too heavily, guaranteeing that workloads land on the absolute cleanest node provided it has <85% CPU utilization.
+
+---
+
+## 🏗️ System Architecture
 
 ```mermaid
 graph TD
-    subgraph Control Plane
-        K8s[Kubernetes API Server]
-        S[Custom DRL Scheduler]
+    subgraph "Kubernetes Cluster (Simulated / Minikube)"
+        API[Kube API Server]
+        W1[Node: us-east / Coal Heavy]
+        W2[Node: eu-west / Wind Heavy]
+        W3[Node: us-west / Solar Heavy]
     end
 
-    subgraph Data Plane (Kind/Minikube)
-        Node1[Node 1: US-East]
-        Node2[Node 2: EU-West]
-        Node3[Node 3: US-West]
+    subgraph "Carbon-Aware Scheduling Engine"
+        SCHED[Custom Python Scheduler<br/>(scheduler.py)]
+        PPO[DRL PPO Model<br/>(carbon_scheduler_model.zip)]
+        C_API[Load-Aware Carbon API<br/>(carbon_api.py)]
     end
 
-    subgraph Infrastructure Services
-        API[Mock Carbon Intensity API]
-        Prom[Prometheus Metrics Exporter :9090]
-        WG[Workload Generator]
+    subgraph "User & Observability"
+        DASH[FastAPI Dashboard<br/>(dashboard_app.py)]
+        PROM[Prometheus Exporter<br/>Port 9090]
+        USER((User))
     end
 
-    K8s <--> |Watch Pending Pods & Bind Nodes| S
-    S --> |Query Real-time Carbon Intensity| API
-    S --> |Expose Scheduling & SLA Metrics| Prom
-    WG --> |Submit Workloads to Cluster| K8s
+    USER -->|Injects Workloads| DASH
+    DASH -->|Creates Pods| API
+    API -->|Watches Pending Pods| SCHED
+    SCHED -->|Fetches Live Node Stats| API
+    SCHED -->|Fetches Grid Intensity| C_API
+    C_API -.->|Reads Node Load| API
+    SCHED <-->|Passes State Vector| PPO
+    SCHED -->|Executes Pod Binding| API
+    SCHED -->|Logs Decision Rationale| DASH
+    SCHED -->|Emits Metrics| PROM
 ```
 
 ---
 
-## 2. Design Rationale (What, How, and Why)
+## 📂 Project Structure
 
-### A. Dynamic Simulation Environment (`gym_env.py`)
-*   **What**: A custom Gymnasium environment replicating a 3-node multi-region cluster (US-East, EU-West, US-West) where carbon intensity fluctuates based on simulated solar and wind grid integration.
-*   **How**: 
-    *   **Observation Space (Size 13)**: Tracks CPU utilization, memory utilization, and carbon intensity for all 3 nodes, plus the CPU request, memory request, SLA type, and current delay steps of the pod to be scheduled.
-    *   **Action Space (Size 4)**: Actions 0, 1, and 2 bind the pod to Nodes 1, 2, or 3 respectively. Action 3 defers scheduling (temporal shifting) of the pod.
-    *   **Reward Function**: Penalizes carbon emissions ($\text{gCO}_2\text{eq}$), node CPU overloads (>90%), and SLA violations (delaying latency-sensitive pods or exceeding the maximum delay threshold for batch pods).
-*   **Why**: Offline training requires a realistic simulation environment to teach the agent the correlations between cluster state, dynamic carbon forecasts, and scheduling consequences without disrupting physical workloads.
-
-### B. Offline Training (`train.py`)
-*   **What**: An orchestration script running PPO reinforcement learning to train the policy network.
-*   **How**: Uses Stable-Baselines3 `PPO` with a Multi-Layer Perceptron (MLP) policy. The agent learns over 50,000 steps and saves the trained neural network model weights to `carbon_scheduler_model.zip`.
-*   **Why**: Proximal Policy Optimization (PPO) was chosen because of its training stability, ease of tuning, and capability to handle mixed discrete action spaces efficiently.
-
-### C. Mock Carbon API (`carbon_api.py`)
-*   **What**: A FastAPI-based local microservice that returns the carbon intensity of a node's geographical region in real time.
-*   **How**: Models diurnal fluctuations using sinusoidal waves to simulate grid cleaner energy cycles.
-*   **Why**: Isolates the scheduler from external API dependencies during demonstration, while maintaining the exact HTTP payload structure of real-world carbon tracking services (e.g., Electricity Maps).
-
-### D. Custom Kubernetes Scheduler (`scheduler.py`)
-*   **What**: A Python controller that acts as the Kubernetes scheduler by intercepting pod manifests containing `schedulerName: carbon-aware-scheduler`.
-*   **How**:
-    *   **Dynamic Node Labeling**: Fetches node specs from the API and reads the `zone` labels dynamically, mapping them to carbon intensity querying endpoints.
-    *   **Polling Loop Stream**: Uses a 5-second polling stream to retrieve pending pods. This prevents event-starvation of deferred pods, ensuring they are re-evaluated immediately when their deferral cooldown expires.
-    *   **Binding Override & SLA Safeguards**: Contains hardcoded safety conditions. If the model recommends deferral (Action 3) but the pod is latency-sensitive OR has already been deferred for 5 consecutive steps, the scheduler overrides the model's action and forces immediate placement on the least-utilized node.
-    *   **Prometheus Metrics**: Registers and exposes counters and gauges for scheduling actions, estimated emissions, and node resource metrics.
-*   **Why**: Decoupling the scheduling logic from the default scheduler allows the custom policy to intercept bindings, defer workloads, and inject custom telemetry seamlessly.
+```text
+.
+├── carbon_api.py               # Simulated load-aware carbon grid intensity API
+├── dashboard_app.py            # FastAPI backend for the interactive UI playground
+├── templates/
+│   └── index.html              # Stunning glassmorphic frontend for real-time visualization
+├── gym_env.py                  # Custom Gymnasium environment defining the DRL MDP & rewards
+├── train.py                    # Training script used to train the PPO agent
+├── scheduler.py                # The core Kubernetes controller and DRL inference loop
+├── carbon_scheduler_model.zip  # The pre-trained neural network (Ready to use)
+├── prometheus.yml              # Prometheus configuration for metrics scraping
+└── README.md                   # This documentation
+```
 
 ---
 
-## 3. Step-by-Step Execution Guide
+## 🚀 Step-by-Step Execution Guide
 
-### Prerequisites
-Ensure you have access to a Kubernetes cluster (Kind, Minikube, or a remote cluster) and Python 3.12+ installed on the host.
+To run this project locally, ensure you have a running Kubernetes cluster (e.g., `kind` or `minikube`) and your `~/.kube/config` is configured.
 
-### Step 1: Install Python Requirements
-First, install the CPU-only version of PyTorch (which reduces installation size from 1.5GB to ~100MB) and other Python dependencies:
+### 1. Install Dependencies
 ```bash
-# Install PyTorch CPU index
-pip install --user --break-system-packages torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+```
+*(Requires: `kubernetes`, `fastapi`, `uvicorn`, `stable-baselines3`, `prometheus-client`, `requests`)*
 
-# Install gymnasium, stable-baselines3, and Kubernetes client library
-pip install --user --break-system-packages -r requirements.txt
+### 2. Start the Required Services
+You must start three separate background services. Open a terminal and run the following commands sequentially:
+
+```bash
+# Start the Load-Aware Carbon API (Port 8000)
+nohup python3 -u carbon_api.py > carbon_api.log 2>&1 &
+
+# Start the Custom DRL Scheduler (Metrics on Port 9090)
+nohup python3 -u scheduler.py > scheduler.log 2>&1 &
+
+# Start the Interactive Web Dashboard (Port 8080)
+nohup python3 dashboard_app.py > dashboard.log 2>&1 &
 ```
 
-### Step 2: Configure the Cluster
-For the scheduler to make correct decisions, the nodes must be labeled with their geographical region and have scheduling enabled.
+### 3. Access the Dashboard
+Open your web browser and navigate to:
+👉 **http://localhost:8080**
 
-1.  **Untaint and Cordon Nodes** (if necessary, so all 3 nodes are schedulable):
-    ```bash
-    kubectl uncordon k8s-worker-stateless
-    kubectl taint nodes lab-cluster-control-plane node-role.kubernetes.io/control-plane:NoSchedule- || true
-    ```
-2.  **Label Nodes with Geographical Carbon Zones**:
-    ```bash
-    kubectl label node lab-cluster-control-plane zone=us-east --overwrite
-    kubectl label node k8s-worker-stateful zone=eu-west --overwrite
-    kubectl label node k8s-worker-stateless zone=us-west --overwrite
-    ```
-3.  **Verify Node Labels**:
-    ```bash
-    kubectl get nodes -L zone
-    ```
+### 4. Inject Workloads and Observe
+1. Use the **Manual Pod Injector** on the dashboard to create workloads.
+2. Select **"Delay-Tolerant"** to watch the temporal shifting engine defer the pod if the grid is dirty.
+3. Select **"Latency-Sensitive"** to watch it bypass deferrals and execute a Spatial Shift.
+4. Watch the **Cluster Nodes State** graph dynamically react: as CPU load increases, the grid's carbon intensity will physically ramp up (simulating the firing up of peaker fossil-fuel plants).
+5. Read the **Deep DRL Decisions & Rationale** to literally see the "thoughts" of the neural agent as it places your pods.
 
-### Step 3: Train the DRL Agent Offline
-Train the policy network using the Gym simulation:
+### 5. Monitor via Terminal (Optional)
+If you prefer raw Kubernetes CLI output, you can watch the scheduler physically bind pods to nodes in real-time:
 ```bash
-python3 train.py
+kubectl get pods -l app=carbon-workload -o wide -w
 ```
-*This will train the PPO model, compare it against a Least-Utilized baseline, and generate the model file `carbon_scheduler_model.zip`.*
-
-### Step 4: Start the Mock Carbon API
-Start the carbon intensity provider in the background:
+You can also view the raw, streaming rationale logs from the scheduler:
 ```bash
-python3 carbon_api.py
+tail -f scheduler.log
 ```
-*Verifies locally on port `8000`. You can test it by running `curl http://localhost:8000/latest?zone=us-west`.*
-
-### Step 5: Start the Custom Scheduler
-Run the scheduler in unbuffered mode to watch logs in real time:
-```bash
-python3 -u scheduler.py
-```
-*The scheduler will log its initialization, load the DRL model from `carbon_scheduler_model.zip`, and begin watching the cluster for pending pods.*
-
-### Step 6: Generate Load
-In a separate terminal, trigger a dynamic load test by submitting 20 pods with varying SLA requirements:
-```bash
-python3 workload_generator.py
-```
-
-### Step 7: Verify Decisions and Metrics
-1.  **Monitor Pod Status**:
-    ```bash
-    kubectl get pods -w
-    ```
-    *Observe that latency-sensitive pods are immediately scheduled on the cleanest nodes, while delay-tolerant pods remain in `Pending` state (deferred) until their cooldown expires or they hit the 5-step SLA safeguard threshold.*
-2.  **Inspect Prometheus Telemetry**:
-    ```bash
-    curl http://localhost:9090/metrics
-    ```
-    *Metrics like `carbon_scheduler_sla_violations_total`, `carbon_scheduler_node_utilization`, and `carbon_scheduler_carbon_intensity` will populate based on real-time scheduler actions.*
 
 ---
 
-## 4. Evaluation Performance Metrics
-
-| Metric | Heuristic Baseline | DRL Scheduler (PPO) | Optimization Delta |
-| :--- | :---: | :---: | :---: |
-| **Grid Carbon Footprint** | $361.18\text{ gCO}_2\text{eq}$ | $81.65\text{ gCO}_2\text{eq}$ | **77.4% Carbon Reduction** |
-| **Cluster CPU Congestion** | 87 Overload Incidents | 0 Overload Incidents | **100% Congestion Avoidance** |
-| **Batch Workload Deferral** | 0 Deferrals | 72 Deferrals | **Active Grid Load Shifting** |
-| **SLA Violations** | 0 | 3 | **Within Safety Envelope** |
+## 🧹 Cleanup
+To tear down the environment, you can click the **Reset Playground** button in the dashboard, or run the following kill commands:
+```bash
+pkill -f carbon_api.py
+pkill -f scheduler.py
+pkill -f dashboard_app.py
+kubectl delete pods -l app=carbon-workload --force --grace-period=0
+```
