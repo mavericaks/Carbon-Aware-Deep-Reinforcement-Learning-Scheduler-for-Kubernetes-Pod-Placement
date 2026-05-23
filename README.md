@@ -36,22 +36,22 @@ This project establishes a novel approach by modeling workload scheduling as a *
 ```mermaid
 graph TD
     subgraph "Kubernetes Cluster (Simulated / Minikube)"
-        API[Kube API Server]
-        W1[Node: us-east / Coal Heavy]
-        W2[Node: eu-west / Wind Heavy]
-        W3[Node: us-west / Solar Heavy]
+        API["Kube API Server"]
+        W1["Node: us-east / Coal Heavy"]
+        W2["Node: eu-west / Wind Heavy"]
+        W3["Node: us-west / Solar Heavy"]
     end
 
     subgraph "Carbon-Aware Scheduling Engine"
-        SCHED[Custom Python Scheduler<br/>(scheduler.py)]
-        PPO[DRL PPO Model<br/>(carbon_scheduler_model.zip)]
-        C_API[Load-Aware Carbon API<br/>(carbon_api.py)]
+        SCHED["Custom Python Scheduler<br/>(scheduler.py)"]
+        PPO["DRL PPO Model<br/>(carbon_scheduler_model.zip)"]
+        C_API["Load-Aware Carbon API<br/>(carbon_api.py)"]
     end
 
     subgraph "User & Observability"
-        DASH[FastAPI Dashboard<br/>(dashboard_app.py)]
-        PROM[Prometheus Exporter<br/>Port 9090]
-        USER((User))
+        DASH["FastAPI Dashboard<br/>(dashboard_app.py)"]
+        PROM["Prometheus Exporter<br/>Port 9090"]
+        USER(("User"))
     end
 
     USER -->|Injects Workloads| DASH
