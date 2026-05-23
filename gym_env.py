@@ -235,4 +235,4 @@ class CarbonAwareSchedEnv(gym.Env):
         if self.current_step >= self.max_steps:
             terminated = True
 
-        return self._get_obs(), reward, terminated, truncated, info
+        return self._get_obs(), float(reward), terminated, truncated, info
