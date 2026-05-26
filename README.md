@@ -107,3 +107,32 @@ pkill -f scheduler.py
 pkill -f dashboard_app.py
 kubectl delete pods -l app=carbon-workload --force --grace-period=0
 ```
+
+---
+
+## 🛠️ Troubleshooting: After VM Restart
+
+If you suspend or restart your virtual machine, the simulated Kubernetes cluster nodes will lose their virtual network bridges and your pods will be stuck in a `Pending` state, and the web dashboard processes will die.
+
+Run this recovery sequence:
+
+**1. Fix the Kubernetes Cluster (Restart Docker):**
+```bash
+sudo systemctl restart docker
+sleep 15
+kubectl get nodes   # Ensure they say "Ready"
+```
+
+**2. Ensure the Dashboard Port is Free:**
+*(If a rogue service like Nginx starts on port 8080 on boot, kill it)*
+```bash
+sudo fuser -k 8080/tcp
+```
+
+**3. Restart the Core Services:**
+```bash
+cd ~/Course\ Project
+nohup python3 -u carbon_api.py > carbon_api.log 2>&1 &
+nohup python3 -u scheduler.py > scheduler.log 2>&1 &
+nohup python3 dashboard_app.py > dashboard.log 2>&1 &
+```
